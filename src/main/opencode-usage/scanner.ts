@@ -79,18 +79,22 @@ function looksLikeWindowsPath(pathValue: string): boolean {
   return /^[A-Za-z]:[\\/]/.test(pathValue) || pathValue.startsWith('\\\\')
 }
 
-function getXdgDataHome(): string {
-  if (process.env.XDG_DATA_HOME?.trim()) {
-    return process.env.XDG_DATA_HOME.trim()
-  }
-  if (process.platform === 'win32') {
-    return process.env.LOCALAPPDATA || process.env.APPDATA || join(homedir(), 'AppData', 'Local')
-  }
-  return join(homedir(), '.local', 'share')
+type OpenCodeDataDirOptions = {
+  env?: NodeJS.ProcessEnv
+  homeDir?: string
+}
+
+// Why: OpenCode stores its data at ~/.local/share/opencode on every platform, including Windows — not under %LOCALAPPDATA% (#10332). Exported pure form lets the Windows path be regression-tested without a real home dir.
+export function resolveOpenCodeDataDirectory(opts: OpenCodeDataDirOptions = {}): string {
+  const env = opts.env ?? process.env
+  const home = opts.homeDir ?? homedir()
+  const xdg = env.XDG_DATA_HOME?.trim()
+  const dataHome = xdg ? xdg : join(home, '.local', 'share')
+  return join(dataHome, 'opencode')
 }
 
 function getOpenCodeDataDirectory(): string {
-  return join(getXdgDataHome(), 'opencode')
+  return resolveOpenCodeDataDirectory()
 }
 
 function getOpenCodeDatabasePathFromEnv(): string | null {

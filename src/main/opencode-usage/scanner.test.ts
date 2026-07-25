@@ -7,6 +7,7 @@ import {
   attributeOpenCodeUsageEvent,
   parseOpenCodeUsageDatabase,
   parseOpenCodeUsageRow,
+  resolveOpenCodeDataDirectory,
   scanOpenCodeUsageDatabases
 } from './scanner'
 
@@ -20,6 +21,23 @@ function createTempDb(): { db: Database.Database; path: string } {
   const path = join(dir, 'opencode.db')
   return { db: new Database(path), path }
 }
+
+describe('resolveOpenCodeDataDirectory', () => {
+  it('uses XDG_DATA_HOME when set', () => {
+    expect(resolveOpenCodeDataDirectory({ env: { XDG_DATA_HOME: '/custom/xdg' }, homeDir: '/home/u' }))
+      .toBe(join('/custom/xdg', 'opencode'))
+  })
+
+  it('falls back to ~/.local/share on every platform, ignoring %LOCALAPPDATA% on Windows (#10332)', () => {
+    // Why: OpenCode stores its DB at ~/.local/share/opencode cross-platform; the
+    // previous Windows branch pointed at %LOCALAPPDATA%/opencode and never found it.
+    const winLike = { LOCALAPPDATA: 'C:\\Users\\u\\AppData\\Local', APPDATA: 'C:\\Users\\u\\AppData\\Roaming' }
+    expect(resolveOpenCodeDataDirectory({ env: winLike, homeDir: 'C:\\Users\\u' }))
+      .toBe(join('C:\\Users\\u', '.local', 'share', 'opencode'))
+    expect(resolveOpenCodeDataDirectory({ env: {}, homeDir: '/home/u' }))
+      .toBe(join('/home/u', '.local', 'share', 'opencode'))
+  })
+})
 
 function worktrees() {
   return [

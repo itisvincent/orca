@@ -5,9 +5,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import Database from '../sqlite/sync-database'
 import {
   attributeOpenCodeUsageEvent,
+  listOpenCodeDatabases,
   parseOpenCodeUsageDatabase,
   parseOpenCodeUsageRow,
-  resolveOpenCodeDataDirectory,
   scanOpenCodeUsageDatabases
 } from './scanner'
 
@@ -22,20 +22,81 @@ function createTempDb(): { db: Database.Database; path: string } {
   return { db: new Database(path), path }
 }
 
-describe('resolveOpenCodeDataDirectory', () => {
-  it('uses XDG_DATA_HOME when set', () => {
-    expect(resolveOpenCodeDataDirectory({ env: { XDG_DATA_HOME: '/custom/xdg' }, homeDir: '/home/u' }))
-      .toBe(join('/custom/xdg', 'opencode'))
+describe('listOpenCodeDatabases', () => {
+  const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+  let home: string
+  let previousEnv: Partial<Record<string, string | undefined>>
+
+  beforeEach(() => {
+    home = mkdtempSync(join(tmpdir(), 'orca-opencode-home-'))
+    tempDirs.push(home)
+    previousEnv = {
+      HOME: process.env.HOME,
+      USERPROFILE: process.env.USERPROFILE,
+      XDG_DATA_HOME: process.env.XDG_DATA_HOME,
+      LOCALAPPDATA: process.env.LOCALAPPDATA,
+      APPDATA: process.env.APPDATA,
+      OPENCODE_DB: process.env.OPENCODE_DB
+    }
+    process.env.HOME = home
+    process.env.USERPROFILE = home
+    delete process.env.XDG_DATA_HOME
+    delete process.env.OPENCODE_DB
   })
 
-  it('falls back to ~/.local/share on every platform, ignoring %LOCALAPPDATA% on Windows (#10332)', () => {
-    // Why: OpenCode stores its DB at ~/.local/share/opencode cross-platform; the
-    // previous Windows branch pointed at %LOCALAPPDATA%/opencode and never found it.
-    const winLike = { LOCALAPPDATA: 'C:\\Users\\u\\AppData\\Local', APPDATA: 'C:\\Users\\u\\AppData\\Roaming' }
-    expect(resolveOpenCodeDataDirectory({ env: winLike, homeDir: 'C:\\Users\\u' }))
-      .toBe(join('C:\\Users\\u', '.local', 'share', 'opencode'))
-    expect(resolveOpenCodeDataDirectory({ env: {}, homeDir: '/home/u' }))
-      .toBe(join('/home/u', '.local', 'share', 'opencode'))
+  afterEach(() => {
+    if (originalPlatform) {
+      Object.defineProperty(process, 'platform', originalPlatform)
+    }
+    for (const [key, value] of Object.entries(previousEnv)) {
+      if (value === undefined) {
+        delete process.env[key]
+      } else {
+        process.env[key] = value
+      }
+    }
+    for (const dir of tempDirs) {
+      rmSync(dir, { recursive: true, force: true })
+    }
+    tempDirs = []
+  })
+
+  it('finds opencode.db under ~/.local/share on Windows instead of %LOCALAPPDATA% (#10332)', async () => {
+    // Why: OpenCode resolves its data dir via xdg-basedir on Windows too, so the DB
+    // lands in ~/.local/share/opencode while %LOCALAPPDATA%\opencode never exists.
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    process.env.LOCALAPPDATA = join(home, 'AppData', 'Local')
+    process.env.APPDATA = join(home, 'AppData', 'Roaming')
+    mkdirSync(join(home, 'AppData', 'Local'), { recursive: true })
+    const dataDir = join(home, '.local', 'share', 'opencode')
+    mkdirSync(dataDir, { recursive: true })
+    const dbPath = join(dataDir, 'opencode.db')
+    new Database(dbPath).close()
+
+    expect(await listOpenCodeDatabases()).toEqual([dbPath])
+  })
+
+  it('still honors XDG_DATA_HOME when set', async () => {
+    const xdgRoot = mkdtempSync(join(tmpdir(), 'orca-opencode-xdg-'))
+    tempDirs.push(xdgRoot)
+    process.env.XDG_DATA_HOME = xdgRoot
+    mkdirSync(join(xdgRoot, 'opencode'), { recursive: true })
+    const dbPath = join(xdgRoot, 'opencode', 'opencode.db')
+    new Database(dbPath).close()
+
+    expect(await listOpenCodeDatabases()).toEqual([dbPath])
+  })
+
+  it('keeps an explicit OPENCODE_DB override ahead of the derived directory', async () => {
+    const overrideDir = mkdtempSync(join(tmpdir(), 'orca-opencode-override-'))
+    tempDirs.push(overrideDir)
+    const overridePath = join(overrideDir, 'opencode.db')
+    new Database(overridePath).close()
+    mkdirSync(join(home, '.local', 'share', 'opencode'), { recursive: true })
+    new Database(join(home, '.local', 'share', 'opencode', 'opencode.db')).close()
+    process.env.OPENCODE_DB = overridePath
+
+    expect(await listOpenCodeDatabases()).toEqual([overridePath])
   })
 })
 

@@ -15,6 +15,14 @@ export function sendTerminalInputAfterComposition(
     return
   }
 
+  // Why: only hold the newline while an IME composition is genuinely pending; otherwise the
+  // 200ms fallback delays every modified-Enter (Shift+Enter newline) on Windows even when no
+  // composition is active, surfacing as a brief input freeze vs non-Enter chords like Alt+J (#10203).
+  if (!hasPendingTerminalImeComposition(terminalElement)) {
+    window.setTimeout(send, 0)
+    return
+  }
+
   const fallbackMs = options?.fallbackMs ?? TERMINAL_IME_DEFERRED_NEWLINE_FALLBACK_MS
   let done = false
 

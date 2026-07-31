@@ -47,6 +47,16 @@ describe('sendTerminalInputAfterComposition', () => {
     expect(send).toHaveBeenCalledTimes(1)
   })
 
+  it('sends on the next macrotask when no composition is pending instead of waiting for the fallback (#10203)', () => {
+    const el = document.createElement('div')
+    const send = vi.fn()
+
+    sendTerminalInputAfterComposition(el, send)
+    // Why: with no pending composition the newline must not be held for the 200ms fallback.
+    vi.advanceTimersByTime(1)
+    expect(send).toHaveBeenCalledTimes(1)
+  })
+
   it('finishes from the captured xterm transaction when deferral starts after compositionend', () => {
     const el = document.createElement('div')
     const send = vi.fn()

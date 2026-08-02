@@ -14,13 +14,12 @@ describe('resolveWindowsShiftEnterEncoding', () => {
     expect(resolveWindowsShiftEnterEncoding({ launchAgentType: 'droid' })).toBe('alt-enter')
   })
 
-  it('uses CSI-u for trusted Pi process evidence so Shift+Enter survives tool-subprocess churn (#9703)', () => {
+  it('uses CSI-u only for trusted Pi process evidence', () => {
     expect(
       resolveWindowsShiftEnterEncoding({
         foreground: { agent: 'pi', routingTrusted: true, shellForeground: false }
       })
     ).toBe('csi-u')
-    // Why: launch ownership alone must not route input - only trusted foreground evidence.
     expect(resolveWindowsShiftEnterEncoding({ launchAgentType: 'pi' })).toBe('alt-enter')
   })
 

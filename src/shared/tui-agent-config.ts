@@ -131,7 +131,7 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     promptInjectionMode: 'argv',
     // Why: pi has no `--prefill` and paste-after-ready races its long startup; the orca-prefill extension seeds this env var instead.
     draftPromptEnvVar: 'ORCA_PI_PREFILL',
-    // Why: Pi enables Kitty keyboard protocol at startup and decodes CSI-u; trust it on Windows so Shift+Enter stays a newline after tool-subprocess churn instead of falling back to Esc+CR (submit) (#9703).
+    // Why: Pi decodes CSI-u; Esc+CR submits after tool subprocesses reset live KKP state (#9703).
     windowsShiftEnterEncoding: 'csi-u'
   },
   omp: {

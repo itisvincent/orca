@@ -9665,6 +9665,8 @@ describe('connectPanePty', () => {
     })
     transportFactoryQueue.push(transport)
     const paneKey = makePaneKey('tab-1', LEAF_1)
+    const transcriptPath =
+      '\\\\?\\C:\\Users\\Example\\.codex\\sessions\\2026\\07\\20\\rollout-codex-session-1.jsonl'
     // Why: after restart agentStatusByPaneKey is empty — the persisted sleeping record is the only provider session id source (#5232).
     mockStoreState = {
       ...mockStoreState,
@@ -9682,7 +9684,11 @@ describe('connectPanePty', () => {
           tabId: 'tab-1',
           worktreeId: 'wt-1',
           agent: 'codex',
-          providerSession: { key: 'session_id', id: 'codex-session-1' },
+          providerSession: {
+            key: 'session_id',
+            id: 'codex-session-1',
+            transcriptPath
+          },
           prompt: 'finish the task',
           state: 'working',
           capturedAt: 1,
@@ -9716,6 +9722,11 @@ describe('connectPanePty', () => {
       expect.objectContaining({
         sessionId: 'lost-pty',
         command: "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'",
+        resumeProviderSession: {
+          key: 'session_id',
+          id: 'codex-session-1',
+          transcriptPath
+        },
         env: expect.objectContaining({
           ORCA_PANE_KEY: paneKey,
           ORCA_TAB_ID: 'tab-1',
@@ -12117,7 +12128,7 @@ describe('connectPanePty', () => {
     })
   })
 
-  it('schedules WebGL atlas recovery after hidden synchronized output parses', async () => {
+  it('defers hidden synchronized-output atlas recovery until reveal', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-id')
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
@@ -12157,13 +12168,13 @@ describe('connectPanePty', () => {
 
       parseCallbacks[0]?.()
 
-      expect(scheduleTerminalWebglAtlasRecovery).toHaveBeenCalledTimes(3)
+      expect(scheduleTerminalWebglAtlasRecovery).not.toHaveBeenCalled()
     } finally {
       vi.useRealTimers()
     }
   })
 
-  it('recognizes hidden synchronized output markers split across PTY chunks', async () => {
+  it('defers split hidden synchronized-output markers until reveal', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-id')
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
@@ -12199,7 +12210,7 @@ describe('connectPanePty', () => {
 
       parseCallbacks[0]?.()
 
-      expect(scheduleTerminalWebglAtlasRecovery).toHaveBeenCalledTimes(3)
+      expect(scheduleTerminalWebglAtlasRecovery).not.toHaveBeenCalled()
     } finally {
       vi.useRealTimers()
     }
@@ -12244,7 +12255,7 @@ describe('connectPanePty', () => {
     }
   })
 
-  it('schedules hidden atlas recovery for high-confidence TUI redraw controls', async () => {
+  it('defers hidden high-confidence TUI redraw recovery until reveal', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-id')
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
@@ -12275,13 +12286,13 @@ describe('connectPanePty', () => {
 
       parseCallbacks[0]?.()
 
-      expect(scheduleTerminalWebglAtlasRecovery).toHaveBeenCalledTimes(1)
+      expect(scheduleTerminalWebglAtlasRecovery).not.toHaveBeenCalled()
     } finally {
       vi.useRealTimers()
     }
   })
 
-  it('advances hidden rewrite state when synchronized output already requests recovery', async () => {
+  it('advances hidden rewrite state without scheduling atlas recovery', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-id')
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
@@ -12315,7 +12326,7 @@ describe('connectPanePty', () => {
       vi.advanceTimersByTime(50)
       expect(writes).toEqual(['prompt rewrite\r', '\x1b[?2026hredraw frame\x1b[?2026l'])
       parseCallbacks.shift()?.()
-      expect(scheduleTerminalWebglAtlasRecovery).toHaveBeenCalledTimes(1)
+      expect(scheduleTerminalWebglAtlasRecovery).not.toHaveBeenCalled()
       scheduleTerminalWebglAtlasRecovery.mockClear()
 
       capturedDataCallback.current?.('plain after frame')
@@ -12358,7 +12369,7 @@ describe('connectPanePty', () => {
       capturedDataCallback.current?.('\x1b[?2026h')
       vi.advanceTimersByTime(50)
       parseCallbacks.shift()?.()
-      expect(scheduleTerminalWebglAtlasRecovery).toHaveBeenCalledTimes(1)
+      expect(scheduleTerminalWebglAtlasRecovery).not.toHaveBeenCalled()
       scheduleTerminalWebglAtlasRecovery.mockClear()
       writes.length = 0
 

@@ -2948,8 +2948,8 @@ export function connectPanePty(
     // identify the launched agent; only adopted or restored PTYs may already be
     // inside Codex with no new foreground signal. But no-OSC shells (Git Bash,
     // cmd.exe) never emit a command-start, so an expected-agent pane spawned into
-    // one would never gain the fresh process evidence that authorizes Droid's
-    // Windows Shift+Enter CSI-u routing — leaving Shift+Enter to submit (#7620).
+    // one would never gain fresh evidence authorizing trusted Windows CSI-u
+    // routing for the launched agent, so Shift+Enter could submit (#7620, #9703).
     // Seed the SAME command-start confirmation the manually-typed launch path
     // uses (onCommandStarted): its bounded retry ladder spans agent boot, and a
     // miss publishes shellForeground:false — recoverable by later focus/reveal

@@ -875,6 +875,9 @@ describe('connectPanePty', () => {
   const originalRequestAnimationFrame = globalThis.requestAnimationFrame
   const originalCancelAnimationFrame = globalThis.cancelAnimationFrame
   const originalDocument = globalThis.document
+  const VISIBLE_PTY_SETTLE_MS = 350
+  const WRAPPER_RESOLVE_RETRY_MS = 1200
+  const SECOND_WRAPPER_RETRY_MS = 6000
 
   beforeEach(() => {
     vi.resetModules()
@@ -6940,7 +6943,9 @@ describe('connectPanePty', () => {
     const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as ((id: string) => void) | undefined
     expect(onPtySpawn).toBeTypeOf('function')
     onPtySpawn?.(ptyId)
-    await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
+    await vi.advanceTimersByTimeAsync(
+      VISIBLE_PTY_SETTLE_MS + WRAPPER_RESOLVE_RETRY_MS + SECOND_WRAPPER_RETRY_MS
+    )
     await flushAsyncTicks()
 
     expect(window.api.pty.confirmForegroundProcess).toHaveBeenCalledWith(ptyId)
@@ -6975,7 +6980,9 @@ describe('connectPanePty', () => {
     await flushAsyncTicks()
     const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as ((id: string) => void) | undefined
     onPtySpawn?.(ptyId)
-    await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
+    await vi.advanceTimersByTimeAsync(
+      VISIBLE_PTY_SETTLE_MS + WRAPPER_RESOLVE_RETRY_MS + SECOND_WRAPPER_RETRY_MS
+    )
     await flushAsyncTicks()
 
     expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
@@ -7090,7 +7097,9 @@ describe('connectPanePty', () => {
     await flushAsyncTicks()
     const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as ((id: string) => void) | undefined
     onPtySpawn?.(ptyId)
-    await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
+    await vi.advanceTimersByTimeAsync(
+      VISIBLE_PTY_SETTLE_MS + WRAPPER_RESOLVE_RETRY_MS + SECOND_WRAPPER_RETRY_MS
+    )
     await flushAsyncTicks()
 
     expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('csi-u')
@@ -7106,7 +7115,9 @@ describe('connectPanePty', () => {
     sendTerminalInputThroughPane(pane, '\x03')
     await flushAsyncTicks()
     expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('alt-enter')
-    await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
+    await vi.advanceTimersByTimeAsync(
+      VISIBLE_PTY_SETTLE_MS + WRAPPER_RESOLVE_RETRY_MS + SECOND_WRAPPER_RETRY_MS
+    )
     await flushAsyncTicks()
 
     expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
@@ -22617,10 +22628,6 @@ describe('connectPanePty', () => {
   })
 
   describe('visible foreground agent sampling (perf)', () => {
-    const VISIBLE_PTY_SETTLE_MS = 350
-    const WRAPPER_RESOLVE_RETRY_MS = 1200
-    const SECOND_WRAPPER_RETRY_MS = 6000
-
     // Why: bindings share the tab-1/LEAF_1 pane key; give each sampling case its own tabId so no other test's publish pollutes it.
     async function connectRestoredPaneForForegroundSampling(
       args: {

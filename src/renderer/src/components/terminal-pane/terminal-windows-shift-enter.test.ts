@@ -5,22 +5,23 @@ import {
 } from './terminal-windows-shift-enter'
 
 describe('resolveWindowsShiftEnterEncoding', () => {
-  it('uses CSI-u only for trusted Droid process evidence', () => {
+  it('uses CSI-u for trusted Droid evidence and for a Droid-launched pane when live trust is missing (#9703 reliability)', () => {
     expect(
       resolveWindowsShiftEnterEncoding({
         foreground: { agent: 'droid', routingTrusted: true, shellForeground: false }
       })
     ).toBe('csi-u')
-    expect(resolveWindowsShiftEnterEncoding({ launchAgentType: 'droid' })).toBe('alt-enter')
+    // Why: launch ownership keeps the encoding applied across a transient foreground-scan miss.
+    expect(resolveWindowsShiftEnterEncoding({ launchAgentType: 'droid' })).toBe('csi-u')
   })
 
-  it('uses LF for trusted Pi process evidence (fast newline, no CSI-u decode freeze) (#9703 #10203)', () => {
+  it('uses LF for trusted Pi evidence and for a Pi-launched pane when live trust is missing (fast newline, no CSI-u decode freeze) (#9703 #10203)', () => {
     expect(
       resolveWindowsShiftEnterEncoding({
         foreground: { agent: 'pi', routingTrusted: true, shellForeground: false }
       })
     ).toBe('lf')
-    expect(resolveWindowsShiftEnterEncoding({ launchAgentType: 'pi' })).toBe('alt-enter')
+    expect(resolveWindowsShiftEnterEncoding({ launchAgentType: 'pi' })).toBe('lf')
   })
 
   it('does not let hook or OSC-derived status forge Droid input routing', () => {
@@ -55,19 +56,19 @@ describe('resolveWindowsShiftEnterEncoding', () => {
     ).toBe('alt-enter')
   })
 
-  it('fails closed while a newer command generation awaits trusted evidence', () => {
+  it('keeps the launch-agent encoding while a newer command generation awaits trusted evidence (#9703 reliability)', () => {
     expect(
       resolveWindowsShiftEnterEncoding({
         foreground: { agent: 'droid', shellForeground: false },
         launchAgentType: 'droid'
       })
-    ).toBe('alt-enter')
+    ).toBe('csi-u')
     expect(
       resolveWindowsShiftEnterEncoding({
         foreground: { agent: null, shellForeground: false },
         launchAgentType: 'droid'
       })
-    ).toBe('alt-enter')
+    ).toBe('csi-u')
   })
 
   it('keeps launch ownership on its original leaf after a split sibling survives', () => {
@@ -78,9 +79,10 @@ describe('resolveWindowsShiftEnterEncoding', () => {
       }
     }
 
-    expect(resolveWindowsShiftEnterEncodingForPane(state, 'tab:launched-droid')).toBe('alt-enter')
+    // Why: launch ownership keeps the encoding applied on the launched leaf across a transient foreground-scan miss.
+    expect(resolveWindowsShiftEnterEncodingForPane(state, 'tab:launched-droid')).toBe('csi-u')
     // Why: after split→close leaves only the sibling, pane count is no longer
-    // ownership evidence; the surviving leaf must keep the legacy fallback.
+    // ownership evidence; the surviving leaf with no launch config keeps the legacy fallback.
     expect(resolveWindowsShiftEnterEncodingForPane(state, 'tab:surviving-sibling')).toBe(
       'alt-enter'
     )

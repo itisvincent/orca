@@ -182,7 +182,12 @@ export function resolveTerminalShortcutAction(
   ) {
     // Why: negotiated KKP is authoritative everywhere; trusted pane evidence also preserves Droid's Windows encoding without KKP.
     const windowsHost = isWindowsTerminalHost()
-    const hasTrustedWindowsCsiU = windowsHost && getWindowsShiftEnterEncoding?.() === 'csi-u'
+    const windowsEncoding = windowsHost ? getWindowsShiftEnterEncoding?.() : undefined
+    // Why: agents that bind a literal LF newline (e.g. Pi's Ctrl+J/0x0A alias) send a fast 1-byte LF instead of CSI-u - avoids the CSI-u decode freeze vs Alt+J (#10203) while staying distinct from Enter's CR (no submit, #9703).
+    if (windowsEncoding === 'lf') {
+      return { type: 'sendInput', data: '\n' }
+    }
+    const hasTrustedWindowsCsiU = windowsEncoding === 'csi-u'
     // Why: CSI-u is application input, not universal; without trusted Windows evidence, require active KKP negotiation.
     const canSendCsiU = hasTrustedWindowsCsiU || isKittyKeyboardActivePane?.() === true
     return { type: 'sendInput', data: canSendCsiU ? '\x1b[13;2u' : '\x1b\r' }

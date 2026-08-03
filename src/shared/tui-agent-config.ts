@@ -40,7 +40,7 @@ export type TuiAgentConfig = {
   /** Renderer-specific signal that the composer is ready for paste, stronger than the default quiet-render window. */
   draftPasteReadySignal?: DraftPasteReadySignal
   /** Windows Shift+Enter encoding override; omitted agents keep the legacy Esc+CR path. */
-  windowsShiftEnterEncoding?: 'csi-u'
+  windowsShiftEnterEncoding?: 'csi-u' | 'lf'
 }
 
 export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
@@ -131,8 +131,8 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     promptInjectionMode: 'argv',
     // Why: pi has no `--prefill` and paste-after-ready races its long startup; the orca-prefill extension seeds this env var instead.
     draftPromptEnvVar: 'ORCA_PI_PREFILL',
-    // Why: Pi decodes CSI-u; Esc+CR submits after tool subprocesses reset live KKP state (#9703).
-    windowsShiftEnterEncoding: 'csi-u'
+    // Why: Pi binds Ctrl+J (0x0A) as a newline alias by default, so sending LF for Shift+Enter is a fast 1-byte newline that avoids both the Esc+CR submit (#9703) and the CSI-u decode freeze vs Alt+J (#10203).
+    windowsShiftEnterEncoding: 'lf'
   },
   omp: {
     detectCmd: 'omp',

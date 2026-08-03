@@ -14,12 +14,12 @@ describe('resolveWindowsShiftEnterEncoding', () => {
     expect(resolveWindowsShiftEnterEncoding({ launchAgentType: 'droid' })).toBe('alt-enter')
   })
 
-  it('uses CSI-u only for trusted Pi process evidence', () => {
+  it('uses LF for trusted Pi process evidence (fast newline, no CSI-u decode freeze) (#9703 #10203)', () => {
     expect(
       resolveWindowsShiftEnterEncoding({
         foreground: { agent: 'pi', routingTrusted: true, shellForeground: false }
       })
-    ).toBe('csi-u')
+    ).toBe('lf')
     expect(resolveWindowsShiftEnterEncoding({ launchAgentType: 'pi' })).toBe('alt-enter')
   })
 

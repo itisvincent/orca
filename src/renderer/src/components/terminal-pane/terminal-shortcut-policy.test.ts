@@ -140,6 +140,25 @@ describe('resolveTerminalShortcutAction', () => {
     ).toEqual({ type: 'sendInput', data: '\x1b[13;2u' })
   })
 
+  it('sends a literal LF for Windows panes whose agent binds the Ctrl+J newline alias (#10203)', () => {
+    // Why: Pi binds 0x0A as a newline; a 1-byte LF is a fast newline that avoids the
+    // CSI-u decode freeze vs Alt+J and stays distinct from Enter's CR (no submit).
+    expect(
+      resolveTerminalShortcutAction(
+        event({ key: 'Enter', code: 'Enter', shiftKey: true }),
+        false,
+        'false',
+        0,
+        true,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        () => 'lf'
+      )
+    ).toEqual({ type: 'sendInput', data: '\n' })
+  })
+
   it('uses CSI-u for a non-Windows PTY reached from Windows only while Kitty is active', () => {
     const getWindowsShiftEnterEncoding = vi.fn(() => 'csi-u' as const)
     const resolve = (kittyActive: boolean) =>

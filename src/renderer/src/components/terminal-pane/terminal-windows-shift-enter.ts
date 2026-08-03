@@ -2,7 +2,7 @@ import type { AgentType } from '../../../../shared/agent-status-types'
 import { TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
 import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
 
-export type WindowsShiftEnterEncoding = 'alt-enter' | 'csi-u'
+export type WindowsShiftEnterEncoding = 'alt-enter' | 'csi-u' | 'lf'
 
 type WindowsShiftEnterAgentSignals = {
   foreground?: PaneForegroundAgentEntry

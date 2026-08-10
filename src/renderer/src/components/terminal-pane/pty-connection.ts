@@ -2132,7 +2132,10 @@ export function connectPanePty(
       userAgent: navigator.userAgent,
       connectionId: getConnectionId(deps.worktreeId) ?? null,
       cwd: deps.cwd,
-      shellOverride: tab?.shellOverride,
+      shellOverride: resolveWindowsShellOverride(
+        tab?.shellOverride,
+        state.settings?.terminalWindowsShell
+      ),
       executionHostId: getExecutionHostIdForWorktree(state, deps.worktreeId)
     })
   }

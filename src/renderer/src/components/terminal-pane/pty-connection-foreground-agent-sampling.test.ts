@@ -331,6 +331,47 @@ describe('connectPanePty', () => {
       }
     })
 
+    it('does not confirm foreground routing for a global Windows WSL shell', async () => {
+      vi.useFakeTimers()
+      const restoreUserAgent = temporarilySetNavigatorUserAgent(
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+      )
+      const ptyId = 'pty-global-wsl-no-confirm'
+      const tabId = `tab-${ptyId}`
+      mockStoreState.tabsByWorktree = {
+        'wt-1': [{ id: tabId, ptyId }]
+      }
+      mockStoreState.settings = {
+        ...mockStoreState.settings,
+        terminalWindowsShell: 'wsl.exe'
+      }
+
+      try {
+        const { binding, cacheKey } = await connectRestoredPaneForForegroundSampling({
+          ptyId,
+          tabId
+        })
+        mockStoreState.paneForegroundAgentByPaneKey[cacheKey] = {
+          agent: 'droid',
+          routingTrusted: true,
+          shellForeground: false
+        }
+
+        binding.sampleForegroundAgentOnFocus()
+        await vi.advanceTimersByTimeAsync(10_000)
+
+        expect(window.api.pty.confirmForegroundProcess).not.toHaveBeenCalledWith(ptyId)
+        expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
+          agent: 'droid',
+          routingRevoked: true,
+          shellForeground: false
+        })
+        expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, cacheKey)).toBe('alt-enter')
+      } finally {
+        restoreUserAgent()
+      }
+    })
+
     it('keeps trusted Droid routing through a rapid Shift+Enter burst', async () => {
       vi.useFakeTimers()
       const ptyId = 'pty-droid-shift-enter-burst'

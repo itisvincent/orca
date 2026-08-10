@@ -2166,6 +2166,18 @@ export function connectPanePty(
     onVisibleForegroundSettled: (outcome) => {
       visibleForegroundSamplePending = false
       visibleForegroundSampleSettled = outcome !== 'inconclusive'
+      if (outcome !== 'inconclusive') {
+        return
+      }
+      const foreground = useAppStore.getState().paneForegroundAgentByPaneKey[cacheKey]
+      if (foreground?.routingConfirmationPending !== true) {
+        return
+      }
+      useAppStore.getState().setPaneForegroundAgent(cacheKey, {
+        agent: foreground.agent,
+        routingRevoked: true,
+        shellForeground: foreground.shellForeground
+      })
     }
   })
   // Why: one command-finished policy whether the signal arrives as bytes
@@ -2245,15 +2257,20 @@ export function connectPanePty(
     // to an agent that already exited before confirmation ever ran.
     if (
       !foreground?.agent ||
+      (foreground.routingTrusted !== true && foreground.routingConfirmationPending !== true) ||
       TUI_AGENT_CONFIG[foreground.agent].windowsShiftEnterEncoding !== 'csi-u'
     ) {
       return
     }
-    // Why: cmd.exe and Git Bash have no OSC command boundaries. Keep the icon
-    // as a hint, but revoke bytes until one current provider confirmation lands.
+    // Why: cmd.exe and Git Bash have no OSC command boundaries. Block title
+    // fallback until confirmation, but retain the prior CSI-u capability while
+    // the asynchronous read is pending so an ambiguous gap cannot submit.
+    const ptyId = transport.getPtyId()
+    const canConfirmRouting = ptyId !== null && isForegroundTrackingAllowed(ptyId)
     useAppStore.getState().setPaneForegroundAgent(cacheKey, {
       agent: foreground.agent,
       routingRevoked: true,
+      ...(canConfirmRouting ? { routingConfirmationPending: true } : {}),
       shellForeground: false
     })
     visibleForegroundSamplePending = false

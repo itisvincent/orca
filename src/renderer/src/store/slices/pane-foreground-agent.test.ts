@@ -31,10 +31,14 @@ describe('pane foreground agent slice', () => {
     store.getState().setPaneForegroundAgent('tab-1:leaf-1', {
       agent: 'aider',
       routingRevoked: true,
+      routingConfirmationPending: true,
       shellForeground: false
     })
     expect(store.getState().paneForegroundAgentByPaneKey).not.toBe(first)
     expect(store.getState().paneForegroundAgentByPaneKey['tab-1:leaf-1']?.routingRevoked).toBe(true)
+    expect(
+      store.getState().paneForegroundAgentByPaneKey['tab-1:leaf-1']?.routingConfirmationPending
+    ).toBe(true)
 
     store.getState().clearPaneForegroundAgent('tab-1:leaf-1')
     expect(store.getState().paneForegroundAgentByPaneKey).toEqual({})

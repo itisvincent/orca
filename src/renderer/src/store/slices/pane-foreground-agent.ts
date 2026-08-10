@@ -9,6 +9,8 @@ export type PaneForegroundAgentEntry = {
   routingTrusted?: boolean
   /** True after exit/input evidence revokes routing until provider confirmation. */
   routingRevoked?: boolean
+  /** True while previously trusted routing awaits provider revalidation. */
+  routingConfirmationPending?: boolean
   /** True once the foreground is proven back at the shell (OSC 133;D) —
    *  process-grade launched-agent exit evidence, independent of titles. */
   shellForeground: boolean
@@ -44,6 +46,7 @@ export const createPaneForegroundAgentSlice: StateCreator<
         current.agent === entry.agent &&
         current.routingTrusted === entry.routingTrusted &&
         current.routingRevoked === entry.routingRevoked &&
+        current.routingConfirmationPending === entry.routingConfirmationPending &&
         current.shellForeground === entry.shellForeground
       ) {
         return s

@@ -708,6 +708,8 @@ type PanePtyBinding = IDisposable & {
   sampleForegroundAgentOnFocus: () => void
   /** Reconfirm after direct shortcut input, which bypasses PTY onData. */
   requestWindowsShiftEnterReconfirmation: () => void
+  /** Refresh interactive redraw scheduling after captured shortcut input. */
+  markShortcutTerminalInputSent: () => void
   reconcileIfSessionDead: (liveSessionIds: Set<string>, snapshotRequestedAt?: number) => void
   reconcileIfSessionMissing: (hasPty: HasPty, livenessRequestedAt?: number) => void
 }
@@ -9473,6 +9475,9 @@ export function connectPanePty(
         requestKnownWindowsShiftEnterReconfirmation()
         sampleVisiblePaneForegroundAgent()
       }, SHIFT_ENTER_RECONFIRM_IDLE_MS)
+    },
+    markShortcutTerminalInputSent() {
+      markAcceptedTerminalInputSent()
     },
     reconcileIfSessionDead,
     reconcileIfSessionMissing,

@@ -55,6 +55,42 @@ describe('createPaneForegroundAgentTracker', () => {
     vi.useRealTimers()
   })
 
+  // Why: an abandoned read publishes nothing, so a capability retained pending its
+  // answer would otherwise be held forever with no read left to release it.
+  it('settles the visible confirmation when a pty rebind abandons its read', async () => {
+    let resolveRead: (value: string | null) => void = () => {}
+    readForegroundProcess.mockImplementation(
+      () =>
+        new Promise<string | null>((resolve) => {
+          resolveRead = resolve
+        })
+    )
+    const tracker = makeTracker()
+
+    tracker.onVisiblePtyBound(true)
+    await flushSettleRead(VISIBLE_PTY_SETTLE_MS)
+
+    // The pane is rebound to a different PTY while the inspection RPC is in flight.
+    ptyId = 'pty-2'
+    resolveRead('pi')
+    await flushSettleRead(1)
+
+    expect(publish).not.toHaveBeenCalled()
+    expect(onVisibleForegroundSettled).toHaveBeenCalledWith('inconclusive')
+  })
+
+  it('settles the visible confirmation when the pty id is gone before the read runs', async () => {
+    readForegroundProcess.mockResolvedValue('pi')
+    const tracker = makeTracker()
+
+    tracker.onVisiblePtyBound(true)
+    ptyId = null
+    await flushSettleRead(VISIBLE_PTY_SETTLE_MS)
+
+    expect(publish).not.toHaveBeenCalled()
+    expect(onVisibleForegroundSettled).toHaveBeenCalledWith('inconclusive')
+  })
+
   // Why: callers gate byte authority on "is a read coming?" — onVisiblePtyBound
   // returning false because a command read already owns the pane must not be
   // mistaken for "nothing will confirm this pane".

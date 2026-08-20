@@ -99,6 +99,15 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
     }, delayMs)
   }
 
+  // Why: a superseded read has a successor that will settle for it, and a disposed
+  // pane has no one to tell. An untrackable pty id is the last read there will be,
+  // so it must release any capability that was retained pending its answer.
+  const settleAbortedRead = (generation: number): void => {
+    if (!disposed && generation === readGeneration) {
+      deps.onVisibleForegroundSettled?.('inconclusive')
+    }
+  }
+
   async function readForeground(
     generation: number,
     retryIndex: number,
@@ -106,6 +115,7 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
   ): Promise<void> {
     const ptyId = trackablePtyId()
     if (disposed || generation !== readGeneration || !ptyId) {
+      settleAbortedRead(generation)
       return
     }
     let processName: string | null = null
@@ -124,6 +134,7 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
     // Why: a pane key can be rebound while process inspection is pending; the
     // old PTY's identity must never publish into its replacement session.
     if (disposed || generation !== readGeneration || trackablePtyId() !== ptyId) {
+      settleAbortedRead(generation)
       return
     }
     const recognized = recognizeAgentProcess(processName)

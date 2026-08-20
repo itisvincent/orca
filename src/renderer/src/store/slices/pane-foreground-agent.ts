@@ -9,7 +9,9 @@ export type PaneForegroundAgentEntry = {
   routingTrusted?: boolean
   /** True after exit/input evidence revokes routing until provider confirmation. */
   routingRevoked?: boolean
-  /** True while previously trusted routing awaits provider revalidation. */
+  /** True while previously trusted routing awaits provider revalidation. Retains
+   *  Shift+Enter byte capability only — the Ctrl+Enter resolver deliberately does
+   *  not read it, because its fallback is a plain CR that submits either way. */
   routingConfirmationPending?: boolean
   /** True once the foreground is proven back at the shell (OSC 133;D) —
    *  process-grade launched-agent exit evidence, independent of titles. */

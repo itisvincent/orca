@@ -99,9 +99,17 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
     }, delayMs)
   }
 
-  // Why: a superseded read has a successor that will settle for it, and a disposed
-  // pane has no one to tell. An untrackable pty id is the last read there will be,
-  // so it must release any capability that was retained pending its answer.
+  const hasPendingRead = (): boolean => scheduledReadReason !== null || activeReadReason !== null
+
+  // Why: the store entry outlives this tracker, so any capability a caller retained
+  // pending a read must be released by whichever exit ends that read. A superseded
+  // read is the one exception — its successor settles for it.
+  const releaseRetainedCapability = (hadReadInFlight: boolean): void => {
+    if (hadReadInFlight) {
+      deps.onVisibleForegroundSettled?.('inconclusive')
+    }
+  }
+
   const settleAbortedRead = (generation: number): void => {
     if (!disposed && generation === readGeneration) {
       deps.onVisibleForegroundSettled?.('inconclusive')
@@ -229,7 +237,7 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
     // command read owns the pane, so "it scheduled nothing" must not be read
     // as "nothing will confirm this pane".
     hasReadInFlight(): boolean {
-      return scheduledReadReason !== null || activeReadReason !== null
+      return hasPendingRead()
     },
     onVisiblePtyBound(expectsAgent = false) {
       // Why: command-start and command-finished reads own the exit decision;
@@ -242,8 +250,10 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
       ) {
         return false
       }
+      const hadReadBeforeVisibleBind = hasPendingRead()
       cancelPendingRead()
       if (!trackablePtyId()) {
+        releaseRetainedCapability(hadReadBeforeVisibleBind)
         return false
       }
       if (expectsAgent || deps.hasKnownAgentIdentity?.() === true) {
@@ -255,8 +265,10 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
       return true
     },
     onCommandStarted(expectedAgent = null) {
+      const hadReadBeforeCommandStart = hasPendingRead()
       cancelPendingRead()
       if (!trackablePtyId()) {
+        releaseRetainedCapability(hadReadBeforeCommandStart)
         return
       }
       const alreadyHasKnownIdentity = deps.hasKnownAgentIdentity?.() === true
@@ -283,8 +295,10 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
       // a D that cancels one must re-confirm — never fast-path to shell, which the
       // sampleVisiblePaneForegroundAgent gate would then latch, permanently hiding
       // an idle reattached agent's icon (the "codex reattached at rest" bug).
+      const hadReadBeforeCommandFinish = hasPendingRead()
       cancelPendingRead()
       if (!trackablePtyId()) {
+        releaseRetainedCapability(hadReadBeforeCommandFinish)
         return false
       }
       // Why: trust the 133;D and mark shell without an RPC only when nothing hints
@@ -300,8 +314,10 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
       return true
     },
     dispose() {
+      const hadReadAtDispose = hasPendingRead()
       disposed = true
       cancelPendingRead()
+      releaseRetainedCapability(hadReadAtDispose)
     }
   }
 }

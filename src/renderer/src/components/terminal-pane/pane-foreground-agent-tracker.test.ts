@@ -55,6 +55,44 @@ describe('createPaneForegroundAgentTracker', () => {
     vi.useRealTimers()
   })
 
+  // Why: detach/remount emits no PTY exit, so the store entry outlives this tracker.
+  // A capability retained pending the disposed read would latch there forever.
+  it('releases a retained capability when disposed mid-read', async () => {
+    readForegroundProcess.mockResolvedValue('pi')
+    const tracker = makeTracker()
+
+    tracker.onVisiblePtyBound(true)
+    tracker.dispose()
+
+    expect(onVisibleForegroundSettled).toHaveBeenCalledWith('inconclusive')
+  })
+
+  it('releases a retained capability when an exit schedules no successor read', async () => {
+    readForegroundProcess.mockResolvedValue('pi')
+    const tracker = makeTracker()
+
+    tracker.onVisiblePtyBound(true)
+    // The pane's pty goes away between the schedule and the next event.
+    ptyId = null
+    expect(tracker.onCommandFinished()).toBe(false)
+
+    expect(onVisibleForegroundSettled).toHaveBeenCalledWith('inconclusive')
+    expect(tracker.hasReadInFlight()).toBe(false)
+  })
+
+  it('does not release when the cancelled read has a successor', async () => {
+    readForegroundProcess.mockResolvedValue('pi')
+    const tracker = makeTracker()
+
+    tracker.onVisiblePtyBound(true)
+    onVisibleForegroundSettled.mockReset()
+    // A trackable pane reschedules, so the successor settles instead.
+    tracker.onCommandStarted()
+
+    expect(onVisibleForegroundSettled).not.toHaveBeenCalled()
+    expect(tracker.hasReadInFlight()).toBe(true)
+  })
+
   // Why: an abandoned read publishes nothing, so a capability retained pending its
   // answer would otherwise be held forever with no read left to release it.
   it('settles the visible confirmation when a pty rebind abandons its read', async () => {

@@ -80,6 +80,22 @@ describe('createPaneForegroundAgentTracker', () => {
     expect(tracker.hasReadInFlight()).toBe(false)
   })
 
+  it.each([
+    { exit: 'visible bind', run: (t: ReturnType<typeof makeTracker>) => t.onVisiblePtyBound(true) },
+    { exit: 'command start', run: (t: ReturnType<typeof makeTracker>) => t.onCommandStarted() }
+  ])('releases a retained capability when an untrackable $exit ends the read', async ({ run }) => {
+    readForegroundProcess.mockResolvedValue('pi')
+    const tracker = makeTracker()
+
+    tracker.onVisiblePtyBound(true)
+    onVisibleForegroundSettled.mockReset()
+    ptyId = null
+    run(tracker)
+
+    expect(onVisibleForegroundSettled).toHaveBeenCalledWith('inconclusive')
+    expect(tracker.hasReadInFlight()).toBe(false)
+  })
+
   it('does not release when the cancelled read has a successor', async () => {
     readForegroundProcess.mockResolvedValue('pi')
     const tracker = makeTracker()

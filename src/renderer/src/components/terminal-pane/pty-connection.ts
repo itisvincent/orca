@@ -2254,14 +2254,10 @@ export function connectPanePty(
   }
   requestKnownWindowsShiftEnterReconfirmation = () => {
     const foreground = useAppStore.getState().paneForegroundAgentByPaneKey[cacheKey]
-    // Why: daemon reattach/launch metadata is display-only until a live
-    // provider read confirms it. Submit/interrupt/title-exit evidence must
-    // revoke that launch-only hint too, otherwise Shift+Enter can route bytes
-    // to an agent that already exited before confirmation ever ran.
-    // Why: only a live provider read can hand out the retained capability, so a
-    // pending entry must never satisfy this precondition — letting it re-arm
-    // itself would make one old read authorize CSI-u forever on a shell that
-    // emits no OSC boundary to publish over it.
+    // Why: daemon reattach/launch metadata is display-only until a live provider
+    // read confirms it, so only proven trust may be revoked-and-retained here. A
+    // pending entry must never qualify: re-arming itself would let one old read
+    // authorize CSI-u forever on a shell that emits no OSC boundary to publish over.
     if (
       !foreground?.agent ||
       foreground.routingTrusted !== true ||
@@ -2280,12 +2276,10 @@ export function connectPanePty(
     // Why: hook rows can suppress display-only sampling, but cannot restore
     // byte authority after this function explicitly revoked routing trust.
     sampleVisiblePaneForegroundAgent(true)
-    // Why: cmd.exe and Git Bash have no OSC command boundaries. Block title
-    // fallback until confirmation, but retain the prior CSI-u capability while
-    // the asynchronous read is pending so an ambiguous gap cannot submit.
-    // Gated on a read actually being in flight: without one nothing would ever
-    // clear the flag, and the pane would keep the capability indefinitely.
-    if (visibleForegroundSamplePending || paneForegroundAgentTracker.hasReadInFlight()) {
+    // Why: cmd.exe and Git Bash have no OSC command boundaries, so retain the prior
+    // CSI-u capability across the async read rather than let the gap send Esc+CR.
+    // Only while a read is genuinely in flight — nothing else ever clears the flag.
+    if (paneForegroundAgentTracker.hasReadInFlight()) {
       useAppStore.getState().setPaneForegroundAgent(cacheKey, {
         ...revokedEntry,
         routingConfirmationPending: true

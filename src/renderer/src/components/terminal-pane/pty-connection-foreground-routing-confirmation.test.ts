@@ -219,6 +219,66 @@ describe('connectPanePty', () => {
       await flushAsyncTicks()
     }
 
+    it('does not retain routing capability when no confirmation read is scheduled', async () => {
+      vi.useFakeTimers()
+      const isVisibleRef = { current: false }
+      const ptyId = 'pty-pi-hidden-no-read'
+      const tabId = `tab-${ptyId}`
+      const { binding, cacheKey } = await connectRestoredPaneForForegroundSampling({
+        ptyId,
+        tabId,
+        isVisibleRef
+      })
+      mockStoreState.paneForegroundAgentByPaneKey[cacheKey] = {
+        agent: 'pi',
+        routingTrusted: true,
+        shellForeground: false
+      }
+
+      // Hidden pane: sampleVisiblePaneForegroundAgent bails, so nothing would ever
+      // clear a pending flag. It must fail closed to the legacy encoding instead.
+      binding.requestWindowsShiftEnterReconfirmation()
+      await vi.advanceTimersByTimeAsync(350)
+      await flushAsyncTicks()
+
+      expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
+        agent: 'pi',
+        routingRevoked: true,
+        shellForeground: false
+      })
+      expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, cacheKey)).toBe('alt-enter')
+    })
+
+    it('does not let a pending confirmation re-arm itself', async () => {
+      vi.useFakeTimers()
+      // Never resolves: the confirmation stays in flight for the whole test.
+      vi.mocked(window.api.pty.confirmForegroundProcess).mockReturnValue(new Promise(() => {}))
+      const ptyId = 'pty-pi-no-remint'
+      const tabId = `tab-${ptyId}`
+      const { binding, cacheKey } = await connectRestoredPaneForForegroundSampling({ ptyId, tabId })
+      mockStoreState.paneForegroundAgentByPaneKey[cacheKey] = {
+        agent: 'pi',
+        routingTrusted: true,
+        shellForeground: false
+      }
+
+      binding.requestWindowsShiftEnterReconfirmation()
+      await vi.advanceTimersByTimeAsync(350)
+      await flushAsyncTicks()
+      expect(
+        mockStoreState.paneForegroundAgentByPaneKey[cacheKey]?.routingConfirmationPending
+      ).toBe(true)
+      const publishesAfterFirst = mockStoreState.setPaneForegroundAgent.mock.calls.length
+
+      // A pending entry is not trusted evidence: further requests must not republish it.
+      binding.requestWindowsShiftEnterReconfirmation()
+      binding.requestWindowsShiftEnterReconfirmation()
+      await vi.advanceTimersByTimeAsync(1_000)
+      await flushAsyncTicks()
+
+      expect(mockStoreState.setPaneForegroundAgent.mock.calls.length).toBe(publishesAfterFirst)
+    })
+
     it('does not reauthorize explicitly revoked routing before confirmation', async () => {
       vi.useFakeTimers()
       const ptyId = 'pty-pi-revoked-focus'

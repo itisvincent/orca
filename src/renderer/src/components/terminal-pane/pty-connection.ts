@@ -2258,29 +2258,39 @@ export function connectPanePty(
     // provider read confirms it. Submit/interrupt/title-exit evidence must
     // revoke that launch-only hint too, otherwise Shift+Enter can route bytes
     // to an agent that already exited before confirmation ever ran.
+    // Why: only a live provider read can hand out the retained capability, so a
+    // pending entry must never satisfy this precondition — letting it re-arm
+    // itself would make one old read authorize CSI-u forever on a shell that
+    // emits no OSC boundary to publish over it.
     if (
       !foreground?.agent ||
-      (foreground.routingTrusted !== true && foreground.routingConfirmationPending !== true) ||
+      foreground.routingTrusted !== true ||
       TUI_AGENT_CONFIG[foreground.agent].windowsShiftEnterEncoding !== 'csi-u'
     ) {
       return
     }
-    // Why: cmd.exe and Git Bash have no OSC command boundaries. Block title
-    // fallback until confirmation, but retain the prior CSI-u capability while
-    // the asynchronous read is pending so an ambiguous gap cannot submit.
-    const ptyId = transport.getPtyId()
-    const canConfirmRouting = ptyId !== null && isForegroundTrackingAllowed(ptyId)
-    useAppStore.getState().setPaneForegroundAgent(cacheKey, {
+    const revokedEntry = {
       agent: foreground.agent,
       routingRevoked: true,
-      ...(canConfirmRouting ? { routingConfirmationPending: true } : {}),
       shellForeground: false
-    })
+    }
+    useAppStore.getState().setPaneForegroundAgent(cacheKey, revokedEntry)
     visibleForegroundSamplePending = false
     visibleForegroundSampleSettled = false
     // Why: hook rows can suppress display-only sampling, but cannot restore
     // byte authority after this function explicitly revoked routing trust.
     sampleVisiblePaneForegroundAgent(true)
+    // Why: cmd.exe and Git Bash have no OSC command boundaries. Block title
+    // fallback until confirmation, but retain the prior CSI-u capability while
+    // the asynchronous read is pending so an ambiguous gap cannot submit.
+    // Gated on a read actually being in flight: without one nothing would ever
+    // clear the flag, and the pane would keep the capability indefinitely.
+    if (visibleForegroundSamplePending) {
+      useAppStore.getState().setPaneForegroundAgent(cacheKey, {
+        ...revokedEntry,
+        routingConfirmationPending: true
+      })
+    }
   }
   const commandLifecycle = createTerminalCommandLifecycle({
     onCommandStarted: () => {

@@ -43,6 +43,8 @@ type PaneForegroundAgentTrackerDeps = {
  * leak their own 133;D onto the main PTY.
  */
 export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTrackerDeps): {
+  /** True while any read is scheduled or running, whatever its authority. */
+  hasReadInFlight: () => boolean
   onVisiblePtyBound: (expectsAgent?: boolean) => boolean
   onCommandStarted: (expectedAgent?: TuiAgent | null) => void
   /** True when pane identity must remain visible until an async shell confirmation. */
@@ -192,6 +194,10 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
         return
       }
       if ((hasForegroundAgentEvidence || hasKnownAgentEvidence) && !isShellProcess(processName)) {
+        // Why: this read may have replaced a cancelled visible-pty confirmation.
+        // It publishes nothing, so without settling here the capability it was
+        // asked to revalidate would be retained with no read left to clear it.
+        deps.onVisibleForegroundSettled?.('inconclusive')
         return
       }
       // Why: the 133;D fired AND the foreground shows no agent — together that is
@@ -208,6 +214,12 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
   }
 
   return {
+    // Why: onVisiblePtyBound refuses to schedule while a higher-authority
+    // command read owns the pane, so "it scheduled nothing" must not be read
+    // as "nothing will confirm this pane".
+    hasReadInFlight(): boolean {
+      return scheduledReadReason !== null || activeReadReason !== null
+    },
     onVisiblePtyBound(expectsAgent = false) {
       // Why: command-start and command-finished reads own the exit decision;
       // visibility recovery is lower-authority and must never cancel them.

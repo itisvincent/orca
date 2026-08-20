@@ -2285,7 +2285,7 @@ export function connectPanePty(
     // the asynchronous read is pending so an ambiguous gap cannot submit.
     // Gated on a read actually being in flight: without one nothing would ever
     // clear the flag, and the pane would keep the capability indefinitely.
-    if (visibleForegroundSamplePending) {
+    if (visibleForegroundSamplePending || paneForegroundAgentTracker.hasReadInFlight()) {
       useAppStore.getState().setPaneForegroundAgent(cacheKey, {
         ...revokedEntry,
         routingConfirmationPending: true

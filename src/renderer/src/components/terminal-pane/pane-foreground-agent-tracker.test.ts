@@ -15,6 +15,7 @@ describe('createPaneForegroundAgentTracker', () => {
   const publish = vi.fn<(entry: PaneForegroundAgentEntry) => void>()
   const onConfirmedShellForeground = vi.fn<() => void>()
   const onCommandFinishedUnavailable = vi.fn<() => void>()
+  const onVisibleForegroundSettled = vi.fn<(outcome: 'agent' | 'shell' | 'inconclusive') => void>()
   let ptyId: string | null = 'pty-1'
 
   function makeTracker(
@@ -28,7 +29,8 @@ describe('createPaneForegroundAgentTracker', () => {
       publish,
       hasKnownAgentIdentity,
       onConfirmedShellForeground,
-      onCommandFinishedUnavailable
+      onCommandFinishedUnavailable,
+      onVisibleForegroundSettled
     })
   }
 
@@ -44,12 +46,51 @@ describe('createPaneForegroundAgentTracker', () => {
     publish.mockReset()
     onConfirmedShellForeground.mockReset()
     onCommandFinishedUnavailable.mockReset()
+    onVisibleForegroundSettled.mockReset()
     ptyId = 'pty-1'
   })
 
   afterEach(() => {
     vi.clearAllTimers()
     vi.useRealTimers()
+  })
+
+  // Why: callers gate byte authority on "is a read coming?" — onVisiblePtyBound
+  // returning false because a command read already owns the pane must not be
+  // mistaken for "nothing will confirm this pane".
+  it('reports a read in flight when a command-finished read owns the pane', async () => {
+    readForegroundProcess.mockResolvedValue('claude')
+    const tracker = makeTracker()
+
+    tracker.onCommandStarted()
+    await flushSettleRead(COMMAND_SETTLE_MS)
+    expect(tracker.hasReadInFlight()).toBe(false)
+
+    expect(tracker.onCommandFinished()).toBe(true)
+    expect(tracker.hasReadInFlight()).toBe(true)
+    // Visibility recovery yields to the higher-authority read...
+    expect(tracker.onVisiblePtyBound(true)).toBe(false)
+    // ...but a confirmation is still coming.
+    expect(tracker.hasReadInFlight()).toBe(true)
+  })
+
+  // Why: this branch publishes nothing, so a visible confirmation it replaced
+  // would otherwise never be settled by anyone.
+  it('settles the visible confirmation when a command-finished read still sees the agent', async () => {
+    readForegroundProcess.mockResolvedValue('claude')
+    const tracker = makeTracker()
+
+    tracker.onCommandStarted()
+    await flushSettleRead(COMMAND_SETTLE_MS)
+    onVisibleForegroundSettled.mockReset()
+
+    // A leaked 133;D cancels the visible read and replaces it with this one.
+    tracker.onVisiblePtyBound(true)
+    tracker.onCommandFinished()
+    readForegroundProcess.mockResolvedValue('git')
+    await flushSettleRead(COMMAND_SETTLE_MS)
+
+    expect(onVisibleForegroundSettled).toHaveBeenCalledWith('inconclusive')
   })
 
   it('reads the foreground once after a command starts and publishes the recognized agent', async () => {

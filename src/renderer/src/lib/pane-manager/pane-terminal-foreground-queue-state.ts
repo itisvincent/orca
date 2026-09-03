@@ -83,9 +83,18 @@ export function clearForegroundCoalesce(entry: QueueEntry): void {
   entry.foregroundCoalesceDelayMs = DEFAULT_FOREGROUND_COALESCE_DELAY_MS
 }
 
-export function scheduleForegroundHoldSafety(entry: QueueEntry): void {
+export function scheduleForegroundHoldSafety(
+  entry: QueueEntry,
+  options?: { rescheduleEarlier?: boolean }
+): void {
+  const requestedDelayMs = entry.foregroundHoldSafetyDelayMs
   clearForegroundHoldSafety(entry)
-  const delayMs = armForegroundReleaseDeadline(entry, entry.foregroundHoldSafetyDelayMs, true)
+  entry.foregroundHoldSafetyDelayMs = requestedDelayMs
+  const delayMs = armForegroundReleaseDeadline(
+    entry,
+    requestedDelayMs,
+    options?.rescheduleEarlier !== true
+  )
   entry.foregroundHoldSafetyTimer = setTimeout(() => {
     entry.foregroundHoldSafetyTimer = null
     entry.foregroundHold = false

@@ -366,6 +366,86 @@ describe('connectPanePty', () => {
     }
   })
 
+  it('presents input typed after a synchronized tool frame is already open', async () => {
+    const restoreNavigator = temporarilySetNavigatorUserAgent(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+    )
+    try {
+      const { connectPanePty } = await import('./pty-connection')
+      const transport = createMockTransport()
+      const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+      transport.connect.mockImplementation(
+        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+          capturedDataCallback.current = callbacks.onData ?? null
+          return 'pty-id'
+        }
+      )
+      transportFactoryQueue.push(transport)
+
+      const pane = createPane(1)
+      const synchronizedOutput = { synchronizedOutput: false }
+      const renderRows = vi.fn()
+      ;(
+        pane.terminal as unknown as {
+          _core: {
+            coreService: { decPrivateModes: typeof synchronizedOutput }
+            _renderService: {
+              _isPaused: boolean
+              refreshRows: ReturnType<typeof vi.fn>
+              _renderer: { value: { renderRows: typeof renderRows } }
+            }
+          }
+        }
+      )._core = {
+        coreService: { decPrivateModes: synchronizedOutput },
+        _renderService: {
+          _isPaused: false,
+          refreshRows: vi.fn(),
+          _renderer: { value: { renderRows } }
+        }
+      }
+      pane.terminal.write.mockImplementation((data, callback) => {
+        if (data.includes('\x1b[?2026h')) {
+          synchronizedOutput.synchronizedOutput = true
+        }
+        if (data.includes('\x1b[?2026l')) {
+          synchronizedOutput.synchronizedOutput = false
+        }
+        callback?.()
+      })
+
+      connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+      await flushAsyncTicks(6)
+
+      vi.useFakeTimers()
+      const repaintBody = 'pi tool repaint '.repeat(200)
+      capturedDataCallback.current?.(`\x1b[?2026h${repaintBody}`)
+      vi.advanceTimersByTime(250)
+      vi.runOnlyPendingTimers()
+      expect(synchronizedOutput.synchronizedOutput).toBe(true)
+      pane.terminal.write.mockClear()
+      renderRows.mockClear()
+
+      sendTerminalInputThroughPane(pane, 'a')
+      vi.advanceTimersByTime(200)
+      capturedDataCallback.current?.(`\x1b[12;4Htyped a ${repaintBody}`)
+
+      vi.advanceTimersByTime(31)
+      expect(renderRows).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(1)
+      vi.runOnlyPendingTimers()
+
+      expect(pane.terminal.write).toHaveBeenCalledWith(
+        expect.stringContaining('typed a'),
+        expect.any(Function)
+      )
+      expect(renderRows).toHaveBeenCalledWith(0, pane.terminal.rows - 1)
+    } finally {
+      vi.useRealTimers()
+      restoreNavigator()
+    }
+  })
+
   it('keeps coalescing a synchronized frame end with no recent input behind the 1s fallback', async () => {
     // Why (STA-1041): fast path is keystroke-only; a background split redraw waits the full fallback so Windows never rasterizes the transient cursor.
     const restoreNavigator = temporarilySetNavigatorUserAgent(

@@ -15,7 +15,6 @@ import type { ProcessLivenessVerdict } from './daemon-incarnation-evidence-types
 import { parseDaemonPidFile } from './daemon-pid-file-parse'
 import { quarantineCorruptDaemonPidRecord } from './daemon-pid-record-quarantine'
 import { inspectProcessLiveness, mergeProcessLivenessVerdict } from './daemon-process-inspection'
-import { buildWindowsProcessTreeCopy } from './daemon-host-process-tree-copy'
 
 /**
  * Relocate the terminal daemon's process image out of the app install dir into LOCAL userData so it
@@ -34,7 +33,6 @@ export type RelocatedDaemonHost = {
 
 const HOST_SUBDIR = 'daemon-host'
 const MARKER_NAME = '.materialized.json'
-const HOST_LAYOUT_VERSION = 2
 
 // LOCAL appData (not roaming) so OneDrive/roaming never syncs this ~260MB runtime. Shared with NSIS uninstall (config/nsis/orca-installer-hooks.nsh) — keep in sync.
 const LOCAL_HOST_ROOT_NAME = 'Orca'
@@ -64,7 +62,11 @@ type DaemonHostSources = {
   entryRelPath: string
 }
 
-type MaterializeMarker = { layoutVersion: number; version: string; completedAt: string; entryRelPath: string }
+type MaterializeMarker = {
+  version: string
+  completedAt: string
+  entryRelPath: string
+}
 
 // win32 path semantics so Windows paths decompose correctly off-win32 in cross-platform unit tests; production runs on win32 only.
 function toPosixRelative(fromDir: string, absPath: string): string {
@@ -176,9 +178,6 @@ export function buildDaemonHostManifest(sources: DaemonHostSources): CopyOp[] {
     filter: isRuntimeNodePtyPath
   })
 
-  // Avoid spawning PowerShell CIM scans while new PTYs and tools are active.
-  ops.push(buildWindowsProcessTreeCopy(appDir, resourcesPath))
-
   return ops
 }
 
@@ -208,7 +207,7 @@ function readMarker(dir: string): MaterializeMarker | null {
     const parsed = JSON.parse(
       readFileSync(join(dir, MARKER_NAME), 'utf8')
     ) as Partial<MaterializeMarker>
-    if (parsed.layoutVersion === HOST_LAYOUT_VERSION && typeof parsed.version === 'string' && typeof parsed.entryRelPath === 'string') {
+    if (typeof parsed.version === 'string' && typeof parsed.entryRelPath === 'string') {
       return {
         version: parsed.version,
         completedAt: typeof parsed.completedAt === 'string' ? parsed.completedAt : '',
@@ -277,7 +276,6 @@ export function materializeRelocatedDaemonHost(): RelocatedDaemonHost | null {
     executeManifest(buildDaemonHostManifest(sources), staging)
     // Marker written LAST so an interrupted copy leaves a marker-less staging dir the next launch discards.
     const marker: MaterializeMarker = {
-      layoutVersion: HOST_LAYOUT_VERSION,
       version,
       completedAt: new Date().toISOString(),
       entryRelPath: sources.entryRelPath

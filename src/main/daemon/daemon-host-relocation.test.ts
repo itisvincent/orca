@@ -87,16 +87,6 @@ function buildInstallFixture(root: string): void {
     mkdirSync(join(prebuildsRoot, arch), { recursive: true })
     writeFileSync(join(prebuildsRoot, arch, 'pty.node'), `${arch}-prebuild`)
   }
-  const processTreeDir = join(root, 'resources', 'node_modules', '@vscode', 'windows-process-tree')
-  mkdirSync(join(processTreeDir, 'lib'), { recursive: true })
-  writeFileSync(join(processTreeDir, 'lib', 'index.js'), 'wrapper')
-  const hostProcessTreeBin = `win32-${process.arch}-${process.versions.modules}`
-  const otherProcessTreeBin = `win32-${process.arch === 'x64' ? 'arm64' : 'x64'}-${process.versions.modules}`
-  mkdirSync(join(processTreeDir, 'bin', hostProcessTreeBin), { recursive: true })
-  mkdirSync(join(processTreeDir, 'bin', otherProcessTreeBin), { recursive: true })
-  writeFileSync(join(processTreeDir, 'bin', hostProcessTreeBin, 'windows-process-tree.node'), 'native')
-  writeFileSync(join(processTreeDir, 'bin', otherProcessTreeBin, 'windows-process-tree.node'), 'other-arch')
-  writeFileSync(join(processTreeDir, 'windows-process-tree.pdb'), 'debug-symbols')
 }
 
 // The win32 prebuild dir the running host arch loads vs. the one that is pruned.
@@ -172,19 +162,6 @@ describe('buildDaemonHostManifest', () => {
     expect(nodePtyOp?.filter?.('node-pty/build/Release/conpty.pdb')).toBe(false)
     expect(nodePtyOp?.filter?.(`node-pty/prebuilds/${HOST_PREBUILD}/pty.node`)).toBe(true)
     expect(nodePtyOp?.filter?.(`node-pty/prebuilds/${OTHER_PREBUILD}/pty.node`)).toBe(false)
-    const processTreeOp = byDest.get('resources/node_modules/@vscode/windows-process-tree')
-    expect(processTreeOp?.kind).toBe('dir')
-    expect(
-      processTreeOp?.filter?.(
-        `bin/win32-${process.arch}-${process.versions.modules}/windows-process-tree.node`
-      )
-    ).toBe(true)
-    expect(
-      processTreeOp?.filter?.(
-        `bin/win32-${process.arch === 'x64' ? 'arm64' : 'x64'}-${process.versions.modules}/windows-process-tree.node`
-      )
-    ).toBe(false)
-    expect(processTreeOp?.filter?.('windows-process-tree.pdb')).toBe(false)
   })
 })
 
@@ -205,34 +182,6 @@ describe('materializeRelocatedDaemonHost', () => {
         join(dest, 'resources', 'node_modules', 'node-pty', 'build', 'Release', 'conpty.node')
       )
     ).toBe(true)
-    expect(
-      existsSync(
-        join(
-          dest,
-          'resources',
-          'node_modules',
-          '@vscode',
-          'windows-process-tree',
-          'bin',
-          `win32-${process.arch}-${process.versions.modules}`,
-          'windows-process-tree.node'
-        )
-      )
-    ).toBe(true)
-    expect(
-      existsSync(
-        join(
-          dest,
-          'resources',
-          'node_modules',
-          '@vscode',
-          'windows-process-tree',
-          'bin',
-          `win32-${process.arch === 'x64' ? 'arm64' : 'x64'}-${process.versions.modules}`,
-          'windows-process-tree.node'
-        )
-      )
-    ).toBe(false)
     expect(
       existsSync(join(dest, 'resources', 'app.asar.unpacked', 'out', 'main', 'chunks', 'a.js'))
     ).toBe(true)

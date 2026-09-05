@@ -424,6 +424,34 @@ describe('pane terminal output scheduler', () => {
     )
   })
 
+  it('safety-flushes a continuously open synchronized frame', async () => {
+    vi.useFakeTimers()
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminal = createTerminal()
+
+    writeTerminalOutput(terminal, '\x1b[?2026h\x1b[?25ltool output', {
+      foreground: true,
+      holdForeground: true,
+      latencySensitive: false
+    })
+    for (let chunk = 0; chunk < 20; chunk += 1) {
+      vi.advanceTimersByTime(10)
+      writeTerminalOutput(terminal, `chunk-${chunk}`, {
+        foreground: true,
+        holdForeground: true,
+        latencySensitive: false
+      })
+    }
+
+    vi.advanceTimersByTime(59)
+    expect(terminal.write).not.toHaveBeenCalled()
+
+    vi.advanceTimersByTime(1)
+    vi.runOnlyPendingTimers()
+    expect(terminal.write).toHaveBeenCalledTimes(1)
+    expect(terminal.write.mock.calls[0]?.[0]).toContain('tool output')
+  })
+
   it('shortens an existing synchronized hold when interactive output arrives', async () => {
     vi.useFakeTimers()
     const { writeTerminalOutput } = await loadScheduler()

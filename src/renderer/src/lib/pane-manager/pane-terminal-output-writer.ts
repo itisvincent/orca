@@ -100,9 +100,7 @@ export function writeTerminalOutputImpl(
         }
         queued.foregroundHold = true
         clearForegroundCoalesce(queued)
-        scheduleForegroundHoldSafety(queued, {
-          rescheduleEarlier: options.latencySensitive === true
-        })
+        scheduleForegroundHoldSafety(queued)
         return
       }
       if (options.coalesceForeground || queued.foregroundCoalesce) {

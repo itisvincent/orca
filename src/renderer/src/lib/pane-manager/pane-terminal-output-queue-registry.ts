@@ -81,8 +81,10 @@ export type QueueEntry = {
   foregroundCoalesceTimer: ReturnType<typeof setTimeout> | null
   // Why: hold and coalesce cancel each other's fallback timer, so an alternating DEC 2026 stream could re-arm both forever and freeze a visible pane (#8754). This caps one non-drainable episode.
   foregroundReleaseDeadlineAt: number | null
-  // Why: an open frame's own hold chunks may still push the deadline out, but once coalesce has taken the entry over the deadline stops moving so the two mechanisms can't re-arm each other.
+  // Why: an open frame can need one split-delivery extension, but the deadline must stop moving before continuous output can re-arm it forever.
   foregroundReleaseDeadlineFixed: boolean
+  // Why: continuous tool output may re-arm hold chunks indefinitely; allow one split-frame extension, then force the safety flush.
+  foregroundHoldSafetyExtended: boolean
 }
 
 export const BACKGROUND_FLUSH_DELAY_MS = 50

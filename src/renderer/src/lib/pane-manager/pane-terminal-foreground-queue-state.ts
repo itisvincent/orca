@@ -30,7 +30,8 @@ export function createQueueEntry(
     foregroundHoldSafetyTimer: null,
     foregroundCoalesceTimer: null,
     foregroundReleaseDeadlineAt: null,
-    foregroundReleaseDeadlineFixed: false
+    foregroundReleaseDeadlineFixed: false,
+    foregroundHoldSafetyExtended: false
   }
 }
 
@@ -57,6 +58,7 @@ function armForegroundReleaseDeadline(
 function resetForegroundReleaseGate(entry: QueueEntry): void {
   entry.foregroundReleaseDeadlineAt = null
   entry.foregroundReleaseDeadlineFixed = false
+  entry.foregroundHoldSafetyExtended = false
 }
 
 export function clearForegroundRelease(entry: QueueEntry): void {
@@ -83,18 +85,16 @@ export function clearForegroundCoalesce(entry: QueueEntry): void {
   entry.foregroundCoalesceDelayMs = DEFAULT_FOREGROUND_COALESCE_DELAY_MS
 }
 
-export function scheduleForegroundHoldSafety(
-  entry: QueueEntry,
-  options?: { rescheduleEarlier?: boolean }
-): void {
+export function scheduleForegroundHoldSafety(entry: QueueEntry): void {
   const requestedDelayMs = entry.foregroundHoldSafetyDelayMs
+  const mayExtend =
+    entry.foregroundReleaseDeadlineAt !== null && !entry.foregroundHoldSafetyExtended
   clearForegroundHoldSafety(entry)
   entry.foregroundHoldSafetyDelayMs = requestedDelayMs
-  const delayMs = armForegroundReleaseDeadline(
-    entry,
-    requestedDelayMs,
-    options?.rescheduleEarlier !== true
-  )
+  const delayMs = armForegroundReleaseDeadline(entry, requestedDelayMs, mayExtend)
+  if (mayExtend) {
+    entry.foregroundHoldSafetyExtended = true
+  }
   entry.foregroundHoldSafetyTimer = setTimeout(() => {
     entry.foregroundHoldSafetyTimer = null
     entry.foregroundHold = false
